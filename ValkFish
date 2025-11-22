@@ -1,0 +1,623 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
+
+-- ============================================
+-- KONFIGURASI
+-- ============================================
+local Config = {
+    AutoPerfect = false,
+    AutoCast = false,
+    SpeedCast = false,
+    AutoReel = false
+}
+
+-- ============================================
+-- VARIABEL GLOBAL
+-- ============================================
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local isFishing = false
+local rodEquipped = false
+
+-- ============================================
+-- FUNGSI UNTUK MENCARI REMOTE EVENTS
+-- ============================================
+local function findRemote(name)
+    local remote = ReplicatedStorage:FindFirstChild(name, true)
+    if not remote then
+        for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+                if string.find(string.lower(v.Name), string.lower(name)) then
+                    return v
+                end
+            end
+        end
+    end
+    return remote
+end
+
+-- Mencari RemoteEvents yang umum digunakan
+local CastRemote = findRemote("Cast") or findRemote("Fishing") or findRemote("Rod")
+local ReelRemote = findRemote("Reel") or findRemote("Catch") or findRemote("Pull")
+local PerfectRemote = findRemote("Perfect") or findRemote("Accuracy") or findRemote("Precision")
+
+-- ============================================
+-- FUNGSI AUTO PERFECT
+-- ============================================
+local function autoPerfectCast()
+    spawn(function()
+        while Config.AutoPerfect do
+            wait(0.1)
+            
+            -- Mencari GUI untuk perfect timing
+            local fishingGui = PlayerGui:FindFirstChild("FishingGui") or PlayerGui:FindFirstChild("Fishing")
+            if fishingGui then
+                local perfectBar = fishingGui:FindFirstChild("PerfectBar", true) or 
+                                  fishingGui:FindFirstChild("AccuracyBar", true) or
+                                  fishingGui:FindFirstChild("PowerBar", true)
+                
+                if perfectBar and perfectBar.Visible then
+                    -- Simulasi perfect timing
+                    if PerfectRemote then
+                        if PerfectRemote:IsA("RemoteEvent") then
+                            PerfectRemote:FireServer(100) -- Perfect score
+                        else
+                            PerfectRemote:InvokeServer(100)
+                        end
+                    end
+                    
+                    -- Alternatif: klik otomatis pada zona perfect
+                    local perfectZone = perfectBar:FindFirstChild("PerfectZone") or 
+                                       perfectBar:FindFirstChild("GreenZone")
+                    if perfectZone then
+                        -- Trigger perfect timing
+                        wait(0.05)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ============================================
+-- FUNGSI AUTO CAST
+-- ============================================
+local function autoCastRod()
+    spawn(function()
+        while Config.AutoCast do
+            wait(0.5)
+            
+            -- Cek apakah ada indikator ikan tertangkap
+            local character = LocalPlayer.Character
+            if character then
+                local head = character:FindFirstChild("Head")
+                if head then
+                    -- Cari billboard atau indikator di atas kepala
+                    local indicator = head:FindFirstChild("FishIndicator") or
+                                    head:FindFirstChild("CatchIndicator") or
+                                    head:FindFirstChild("!")
+                    
+                    if indicator and indicator.Visible then
+                        -- Langsung reel/catch ikan
+                        if ReelRemote then
+                            if ReelRemote:IsA("RemoteEvent") then
+                                ReelRemote:FireServer()
+                            else
+                                ReelRemote:InvokeServer()
+                            end
+                        end
+                        
+                        -- Reset indikator
+                        isFishing = false
+                        wait(1)
+                        
+                        -- Cast ulang
+                        if CastRemote and rodEquipped then
+                            wait(0.5)
+                            if CastRemote:IsA("RemoteEvent") then
+                                CastRemote:FireServer(100) -- Power 100%
+                            else
+                                CastRemote:InvokeServer(100)
+                            end
+                            isFishing = true
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ============================================
+-- FUNGSI SPEED CAST
+-- ============================================
+local function speedCast()
+    spawn(function()
+        while Config.SpeedCast do
+            wait(0.1)
+            
+            if isFishing then
+                -- Manipulasi waktu tunggu ikan
+                local fishingData = ReplicatedStorage:FindFirstChild("FishingData") or
+                                   ReplicatedStorage:FindFirstChild("PlayerData")
+                
+                if fishingData then
+                    local waitTime = fishingData:FindFirstChild("WaitTime") or
+                                    fishingData:FindFirstChild("BiteDuration")
+                    
+                    if waitTime and waitTime.Value > 0 then
+                        -- Kurangi waktu tunggu drastis
+                        waitTime.Value = 0.1
+                    end
+                end
+                
+                -- Alternatif: trigger bite event langsung
+                local biteRemote = findRemote("Bite") or findRemote("Hook")
+                if biteRemote then
+                    if biteRemote:IsA("RemoteEvent") then
+                        biteRemote:FireServer()
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ============================================
+-- FUNGSI AUTO REEL
+-- ============================================
+local function autoReel()
+    spawn(function()
+        while Config.AutoReel do
+            wait(0.1)
+            
+            -- Cek GUI minigame
+            local reelGui = PlayerGui:FindFirstChild("ReelGui") or 
+                           PlayerGui:FindFirstChild("CatchGui") or
+                           PlayerGui:FindFirstChild("MinigameGui")
+            
+            if reelGui and reelGui.Visible then
+                -- Auto complete minigame
+                local completeRemote = findRemote("Complete") or findRemote("Success")
+                if completeRemote then
+                    if completeRemote:IsA("RemoteEvent") then
+                        completeRemote:FireServer(true)
+                    else
+                        completeRemote:InvokeServer(true)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ============================================
+-- DETEKSI ROD EQUIPPED
+-- ============================================
+LocalPlayer.Character.ChildAdded:Connect(function(item)
+    if item:IsA("Tool") and (string.find(string.lower(item.Name), "rod") or 
+                            string.find(string.lower(item.Name), "fishing")) then
+        rodEquipped = true
+    end
+end)
+
+LocalPlayer.Character.ChildRemoved:Connect(function(item)
+    if item:IsA("Tool") then
+        rodEquipped = false
+        isFishing = false
+    end
+end)
+
+-- ============================================
+-- GUI INTERFACE
+-- ============================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "FishItGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = PlayerGui
+
+-- Main Frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 300, 0, 250)
+MainFrame.Position = UDim2.new(0.5, -150, 0.5, -125)
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = MainFrame
+
+-- Title Bar
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Size = UDim2.new(1, -40, 0, 40)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Title.BorderSizePixel = 0
+Title.Text = "🎣 Fish It Helper"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 20
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = Title
+
+-- Close Button
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Name = "CloseBtn"
+CloseBtn.Size = UDim2.new(0, 35, 0, 35)
+CloseBtn.Position = UDim2.new(1, -76, 0, 2.5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Text = "×"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 24
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Parent = MainFrame
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 8)
+CloseCorner.Parent = CloseBtn
+
+-- RGB Border untuk Close Button
+local CloseBorder = Instance.new("UIStroke")
+CloseBorder.Thickness = 2
+CloseBorder.Color = Color3.fromRGB(255, 0, 0)
+CloseBorder.Parent = CloseBtn
+
+-- Minimize Button
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Name = "MinimizeBtn"
+MinimizeBtn.Size = UDim2.new(0, 35, 0, 35)
+MinimizeBtn.Position = UDim2.new(1, -38, 0, 2.5)
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+MinimizeBtn.BorderSizePixel = 0
+MinimizeBtn.Text = "━"
+MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizeBtn.TextSize = 20
+MinimizeBtn.Font = Enum.Font.GothamBold
+MinimizeBtn.Parent = MainFrame
+
+local MinimizeCorner = Instance.new("UICorner")
+MinimizeCorner.CornerRadius = UDim.new(0, 8)
+MinimizeCorner.Parent = MinimizeBtn
+
+-- RGB Border untuk Minimize Button
+local MinimizeBorder = Instance.new("UIStroke")
+MinimizeBorder.Thickness = 2
+MinimizeBorder.Color = Color3.fromRGB(255, 0, 0)
+MinimizeBorder.Parent = MinimizeBtn
+
+-- Animasi RGB untuk Border
+local rgbRunning = true
+spawn(function()
+    local hue = 0
+    while wait(0.03) do
+        if not rgbRunning then break end
+        hue = hue + 0.01
+        if hue > 1 then hue = 0 end
+        MinimizeBorder.Color = Color3.fromHSV(hue, 1, 1)
+        CloseBorder.Color = Color3.fromHSV(hue, 1, 1)
+    end
+end)
+
+-- Open Button (Tombol untuk buka kembali)
+local OpenBtn = Instance.new("TextButton")
+OpenBtn.Name = "OpenBtn"
+OpenBtn.Size = UDim2.new(0, 50, 0, 50)
+OpenBtn.Position = UDim2.new(0, 10, 0.5, -25)
+OpenBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+OpenBtn.BorderSizePixel = 0
+OpenBtn.Text = "🎣"
+OpenBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+OpenBtn.TextSize = 24
+OpenBtn.Font = Enum.Font.GothamBold
+OpenBtn.Visible = false
+OpenBtn.Parent = ScreenGui
+
+local OpenCorner = Instance.new("UICorner")
+OpenCorner.CornerRadius = UDim.new(0, 10)
+OpenCorner.Parent = OpenBtn
+
+-- RGB Border untuk Open Button
+local OpenBorder = Instance.new("UIStroke")
+OpenBorder.Thickness = 3
+OpenBorder.Color = Color3.fromRGB(255, 0, 0)
+OpenBorder.Parent = OpenBtn
+
+-- Animasi RGB untuk Open Button Border
+spawn(function()
+    local hue = 0
+    while wait(0.03) do
+        hue = hue + 0.01
+        if hue > 1 then hue = 0 end
+        OpenBorder.Color = Color3.fromHSV(hue, 1, 1)
+    end
+end)
+
+-- Fungsi untuk mematikan semua fitur
+local function disableAllFeatures()
+    Config.AutoPerfect = false
+    Config.AutoCast = false
+    Config.SpeedCast = false
+    Config.AutoReel = false
+    rgbRunning = false
+    
+    -- Reset visual semua toggle button ke OFF
+    for name, data in pairs(toggleButtons) do
+        data.enabled = false
+        data.button.Text = name .. ": OFF"
+        data.button.TextColor3 = Color3.fromRGB(255, 100, 100)
+        data.button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    end
+    
+    notify("All features disabled! Script closed.")
+end
+
+-- Fungsi Close
+CloseBtn.MouseButton1Click:Connect(function()
+    -- Matikan semua fitur
+    disableAllFeatures()
+    
+    -- Animasi menutup
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(MainFrame, tweenInfo, {
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0)
+    })
+    tween:Play()
+    
+    tween.Completed:Connect(function()
+        -- Hapus GUI sepenuhnya
+        ScreenGui:Destroy()
+    end)
+end)
+
+-- Hover effect untuk close button
+CloseBtn.MouseEnter:Connect(function()
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
+    TweenService:Create(CloseBtn, tweenInfo, {
+        BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+    }):Play()
+end)
+
+CloseBtn.MouseLeave:Connect(function()
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
+    TweenService:Create(CloseBtn, tweenInfo, {
+        BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    }):Play()
+end)
+
+-- Fungsi Minimize/Open
+local isMinimized = false
+
+MinimizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = true
+    
+    -- Animasi menutup
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(MainFrame, tweenInfo, {
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0)
+    })
+    tween:Play()
+    
+    tween.Completed:Connect(function()
+        MainFrame.Visible = false
+        OpenBtn.Visible = true
+        
+        -- Animasi open button muncul
+        OpenBtn.Size = UDim2.new(0, 0, 0, 0)
+        local openTween = TweenService:Create(OpenBtn, tweenInfo, {
+            Size = UDim2.new(0, 50, 0, 50)
+        })
+        openTween:Play()
+    end)
+end)
+
+OpenBtn.MouseButton1Click:Connect(function()
+    isMinimized = false
+    
+    -- Animasi menutup open button
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local closeTween = TweenService:Create(OpenBtn, tweenInfo, {
+        Size = UDim2.new(0, 0, 0, 0)
+    })
+    closeTween:Play()
+    
+    closeTween.Completed:Connect(function()
+        OpenBtn.Visible = false
+        MainFrame.Visible = true
+        
+        -- Animasi main frame muncul
+        MainFrame.Size = UDim2.new(0, 0, 0, 0)
+        MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+        
+        local openTween = TweenService:Create(MainFrame, tweenInfo, {
+            Size = UDim2.new(0, 300, 0, 250),
+            Position = UDim2.new(0.5, -150, 0.5, -125)
+        })
+        openTween:Play()
+    end)
+end)
+
+-- Hover effect untuk minimize button
+MinimizeBtn.MouseEnter:Connect(function()
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
+    TweenService:Create(MinimizeBtn, tweenInfo, {
+        BackgroundColor3 = Color3.fromRGB(65, 65, 65)
+    }):Play()
+end)
+
+MinimizeBtn.MouseLeave:Connect(function()
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
+    TweenService:Create(MinimizeBtn, tweenInfo, {
+        BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    }):Play()
+end)
+
+-- Hover effect untuk open button
+OpenBtn.MouseEnter:Connect(function()
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
+    TweenService:Create(OpenBtn, tweenInfo, {
+        BackgroundColor3 = Color3.fromRGB(65, 65, 65),
+        Size = UDim2.new(0, 55, 0, 55)
+    }):Play()
+end)
+
+OpenBtn.MouseLeave:Connect(function()
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
+    TweenService:Create(OpenBtn, tweenInfo, {
+        BackgroundColor3 = Color3.fromRGB(45, 45, 45),
+        Size = UDim2.new(0, 50, 0, 50)
+    }):Play()
+end)
+
+-- Fungsi untuk membuat toggle button
+local toggleButtons = {}
+local function createToggle(name, position, callback)
+    local Toggle = Instance.new("TextButton")
+    Toggle.Name = name
+    Toggle.Size = UDim2.new(0, 260, 0, 35)
+    Toggle.Position = UDim2.new(0, 20, 0, position)
+    Toggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    Toggle.BorderSizePixel = 0
+    Toggle.Text = name .. ": OFF"
+    Toggle.TextColor3 = Color3.fromRGB(255, 100, 100)
+    Toggle.TextSize = 16
+    Toggle.Font = Enum.Font.Gotham
+    Toggle.Parent = MainFrame
+    
+    local ToggleCorner = Instance.new("UICorner")
+    ToggleCorner.CornerRadius = UDim.new(0, 8)
+    ToggleCorner.Parent = Toggle
+    
+    local enabled = false
+    
+    -- Simpan referensi toggle
+    toggleButtons[name] = {button = Toggle, enabled = enabled}
+    
+    Toggle.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        toggleButtons[name].enabled = enabled
+        
+        if enabled then
+            Toggle.Text = name .. ": ON"
+            Toggle.TextColor3 = Color3.fromRGB(100, 255, 100)
+            Toggle.BackgroundColor3 = Color3.fromRGB(30, 70, 30)
+        else
+            Toggle.Text = name .. ": OFF"
+            Toggle.TextColor3 = Color3.fromRGB(255, 100, 100)
+            Toggle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        end
+        callback(enabled)
+    end)
+    
+    -- Hover effect
+    Toggle.MouseEnter:Connect(function()
+        local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
+        local targetColor = enabled and Color3.fromRGB(40, 90, 40) or Color3.fromRGB(70, 70, 70)
+        TweenService:Create(Toggle, tweenInfo, {
+            BackgroundColor3 = targetColor
+        }):Play()
+    end)
+    
+    Toggle.MouseLeave:Connect(function()
+        local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
+        local targetColor = enabled and Color3.fromRGB(30, 70, 30) or Color3.fromRGB(50, 50, 50)
+        TweenService:Create(Toggle, tweenInfo, {
+            BackgroundColor3 = targetColor
+        }):Play()
+    end)
+    
+    return Toggle
+end
+
+-- Buat toggle buttons
+createToggle("Auto Perfect", 50, function(enabled)
+    Config.AutoPerfect = enabled
+    if enabled then autoPerfectCast() end
+end)
+
+createToggle("Auto Cast", 95, function(enabled)
+    Config.AutoCast = enabled
+    if enabled then autoCastRod() end
+end)
+
+createToggle("Speed Cast", 140, function(enabled)
+    Config.SpeedCast = enabled
+    if enabled then speedCast() end
+end)
+
+createToggle("Auto Reel", 185, function(enabled)
+    Config.AutoReel = enabled
+    if enabled then autoReel() end
+end)
+
+-- Drag functionality untuk MainFrame
+local dragging, dragInput, dragStart, startPos
+
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+MainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, 
+                                       startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Drag functionality untuk OpenBtn
+local draggingOpen, dragInputOpen, dragStartOpen, startPosOpen
+
+OpenBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingOpen = true
+        dragStartOpen = input.Position
+        startPosOpen = OpenBtn.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                draggingOpen = false
+            end
+        end)
+    end
+end)
+
+OpenBtn.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInputOpen = input
+    end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if input == dragInputOpen and draggingOpen then
+        local delta = input.Position - dragStartOpen
+        OpenBtn.Position = UDim2.new(startPosOpen.X.Scale, startPosOpen.X.Offset + delta.X, 
+                                      startPosOpen.Y.Scale, startPosOpen.Y.Offset + delta.Y)
+    end
+end)
